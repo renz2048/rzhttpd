@@ -6,17 +6,23 @@
  ************************************************************************/
 
 #include <stdio.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdlib.h>
+#include <arpa/inet.h>
+
+#define BACKLOG 5                 //how many pending connections queue will hold
 
 int startup(u_short *port);
 
 int main()
 {
+    int server_sock = -1;
     u_short port = 4000;
-    startup(&port);
+    server_sock = startup(&port);//传入port的地址，为了便于当port不可用时修改port
+    printf("httpd running on port %d\n", port);
     return 0;
 }
 
@@ -28,6 +34,7 @@ int main()
 int startup(u_short *port)//port的格式
 {
     int httpd = 0;
+    int on = 1;
     struct sockaddr_in name;
     /*
      * #include <sys/types.h>
@@ -53,6 +60,12 @@ int startup(u_short *port)//port的格式
         perror("socket");
         exit(1);
     }
+
+    //设置套接字选项
+    if( ( setsockopt(httpd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int)) ) == -1 ) {
+        perror("setsockopt failed");
+        exit(1);
+    }
     
     memset(&name, 0, sizeof(name));
     name.sin_family = AF_INET;
@@ -71,11 +84,18 @@ int startup(u_short *port)//port的格式
      *     unsigned long s_addr;    //load with inet_aton()
      * };
      */
-    bind(httpd, (struct sockaddr *)&name, sizeof(name));
+    if( (bind(httpd, (struct sockaddr *)&name, sizeof(name)) ) == -1 ) {
+        perror("bind");
+        exit(1);
+    }
 
     /*
      * listen
      */
+     if( ( listen(httpd, BACKLOG) ) == -1 ) {
+         perror("listen");
+         exit(1);
+     }
 
-    return 0;
+    return httpd;
 }
