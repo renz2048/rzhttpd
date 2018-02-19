@@ -16,13 +16,29 @@
 #define BACKLOG 5                 //how many pending connections queue will hold
 
 int startup(u_short *port);
+void accept_request(void *);
 
 int main()
 {
     int server_sock = -1;
     u_short port = 4000;
+    int client_sock = -1;
+    struct sockaddr_in client_name;
+    socklen_t client_name_len = sizeof(client_name);
+
     server_sock = startup(&port);//传入port的地址，为了便于当port不可用时修改port
     printf("httpd running on port %d\n", port);
+
+    while(1)
+    {
+        client_sock = accept(server_sock, (struct sockaddr *)&client_name, &client_name_len);
+        if( client_sock == -1 ) {
+            perror("accept");
+        }
+        accept_request(&client_sock);
+    }
+
+    close(server_sock);
     return 0;
 }
 
@@ -97,5 +113,14 @@ int startup(u_short *port)//port的格式
          exit(1);
      }
 
-    return httpd;
+    return(httpd);
+}
+
+void accept_request(void *arg)
+{
+    int client = (intptr_t)arg;
+    char buf[1024];
+    size_t numchars;
+
+    numchars = get_line(client, buf, sizeof(buf));
 }
