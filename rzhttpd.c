@@ -96,12 +96,19 @@ void accept_request(int client)
 
   numchars = get_line(client, buf, sizeof(buf));
   i = 0; j = 0;
+
+  /*
+   * GET / HTTP/1.1CRLF
+   */
+
+  //取出GET放入method
   while (!ISspace(buf[j]) && (i < sizeof(method) - 1)) {
     method[i] = buf[j];
     i++; j++;
   }
   method[i] = '\0';
   
+  //如果不是GET方法和POST方法，调用unimplemented接口，表明方法不被支持
   if (strcasecmp(method, "GET") && strcasecmp(method, "POST")) {
     unimplemented(client);
     return;
@@ -118,7 +125,7 @@ void accept_request(int client)
     url[i] = buf[j];
     i++; j++;
   }
-  url[i] = "\0";
+  url[i] = '\0';
 
   if (strcasecmp(method, "GET") == 0) {
     query_string = url;
@@ -134,6 +141,7 @@ void accept_request(int client)
   sprintf(path, "htdocs%s", url);
   if (path[strlen(path) - 1] == '/')
     strcat(path, "index.html");
+puts(path);
   if (stat(path, &st) == -1) {
     while ((numchars > 0) && strcmp("\n",buf)) /* read & discard headers */
       numchars = get_line(client, buf, sizeof(buf));
@@ -145,6 +153,8 @@ void accept_request(int client)
         (st.st_mode & S_IXGRP) ||
         (st.st_mode & S_IXOTH)    )
       cgi = 1;
+printf("%d\n",cgi);
+
     if (!cgi)
       serve_file(client, path);
     else
@@ -159,6 +169,7 @@ void cat(int client, FILE *resource)
   char buf[1024];
   fgets(buf, sizeof(buf), resource);
   while (!feof(resource)) {
+printf("cat\n");
     send(client, buf, strlen(buf), 0);
     fgets(buf, sizeof(buf), resource);
   }
@@ -185,6 +196,7 @@ void headers(int client, const char *filename)
   send(client, buf, strlen(buf), 0);
   strcpy(buf, "\r\n");
   send(client, buf, strlen(buf), 0);
+printf("headers\n");
 }
 
 /*
@@ -246,6 +258,7 @@ int get_line(int sock, char *buf, int size)
   {
     //if recv return 0, This mean only one thing:the remote side has closed the connection on you.
     n = recv(sock, &c, 1, 0);
+    printf("%02X\n",c);
     if (n > 0) {
       if (c == '\r') {
         n = recv(sock, &c, 1, MSG_PEEK);
@@ -279,6 +292,7 @@ void serve_file(int client, const char *filename)
   if (resource == NULL)
     not_found(client);
   else{
+printf("serve_file:after fopen success\n");
     headers(client, filename);
     cat(client, resource);
   }
