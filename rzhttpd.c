@@ -5,35 +5,46 @@
 	> Created Time: Sat Feb  3 19:35:08 2018
  ************************************************************************/
 
-#include <arpa/inet.h>
-#include <ctype.h>
-#include <netinet/in.h>
 #include <stdio.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/socket.h>
-#include <stdlib.h>
-#include <string.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
+#include <ctype.h>
+#include <strings.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <stdlib.h>
 
 #define ISspace(x) isspace((int)(x))
 
 #define BACKLOG 5                 //how many pending connections queue will hold
-#define SERVER_STRING "Server: jgbhttpd/0.1.0\r\n"
+#define SERVER_STRING "Server: jdbhttpd/0.1.0\r\n"
 
 
-void accept_request(int client);
-void cat(int client, FILE *resource);
-void execute_cgi(int client, const char *path, const char *method, const char *query_string);
-int get_line(int sock, char *buf, int size);
-void headers(int client, const char *filename);
-void not_found(int client);
-void serve_file(int client, const char *filename);
-int startup(u_short *port);
-void unimplemented(int client);
+void accept_request(int);
+void cat(int, FILE *);
+void execute_cgi(int, const char *, const char *, const char *);
+int get_line(int, char *, int);
+void headers(int, const char *);
+void not_found(int);
+void serve_file(int, const char *);
+int startup(u_short *);
+void unimplemented(int);
 
 
+//void accept_request(int client);
+//void cat(int client, FILE *resource);
+//void execute_cgi(int client, const char *path, const char *method, const char *query_string);
+//int get_line(int sock, char *buf, int size);
+//void headers(int client, const char *filename);
+//void not_found(int client);
+//void serve_file(int client, const char *filename);
+//int startup(u_short *port);
+//void unimplemented(int client);
 /*
  * 初始化http服务：建立套接字
  *                 绑定端口
@@ -42,7 +53,7 @@ void unimplemented(int client);
 int startup(u_short *port)//port的格式
 {
   int httpd = 0;
-  int on = 1;
+  //int on = 1;
   struct sockaddr_in name;
   /*
    * socket
@@ -53,10 +64,10 @@ int startup(u_short *port)//port的格式
   }
 
   //设置套接字选项
-  if( ( setsockopt(httpd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int)) ) == -1 ) {
-    perror("setsockopt failed");
-    exit(1);
-  }
+  //if( ( setsockopt(httpd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int)) ) == -1 ) {
+  //  perror("setsockopt failed");
+  //  exit(1);
+  //}
   
   memset(&name, 0, sizeof(name));
   name.sin_family = AF_INET;
@@ -178,6 +189,10 @@ printf("cat\n");
 void execute_cgi(int client, const char *path, const char *method, const char *query_string)
 {
   //TODO
+  (void)client;
+  (void)path;
+  (void)method;
+  (void)query_string;
 }
 
 /*
@@ -302,7 +317,7 @@ printf("serve_file:after fopen success\n");
 int main()
 {
   int server_sock = -1;
-  u_short port = 4000;
+  u_short port = 56784;
   int client_sock = -1;
   struct sockaddr_in client_name;
   socklen_t client_name_len = sizeof(client_name);
@@ -315,6 +330,7 @@ int main()
     client_sock = accept(server_sock, (struct sockaddr *)&client_name, &client_name_len);
     if( client_sock == -1 ) {
       perror("accept");
+      exit(1);
     }
     accept_request(client_sock);
   }
