@@ -15,7 +15,6 @@
 #include <strings.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <string.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 
@@ -90,7 +89,7 @@ int startup(u_short *port)//port的格式
     exit(1);
   }
 
-  return(httpd);
+  return httpd;
 }
 
 void accept_request(int client)
@@ -99,7 +98,7 @@ void accept_request(int client)
   int numchars;
   char method[255];
   char url[255];
-  char path[255];
+  char path[512];
   size_t i, j;
   struct stat st;
   int cgi = 0;    /*becomes true if server decides this is a CGI program*/ 
@@ -277,7 +276,7 @@ int get_line(int sock, char *buf, int size)
     if (n > 0) {
       if (c == '\r') {
         n = recv(sock, &c, 1, MSG_PEEK);
-        if ((n > 0) && (c != '\n')) {
+        if ((n > 0) && (c == '\n')) {
           recv(sock, &c, 1, 0);
         }else{
           c = '\n';
