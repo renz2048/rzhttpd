@@ -30,3 +30,24 @@ int init_net(u_short *port)
   return httpd;
 }
 ```
+
+# 2. accept
+与客户端建立连接
+```
+while(1)
+{
+  client_sock = accept(server_sock, (struct sockaddr *)&client_name, &client_name_len);
+  if(client_sock == -1) {
+    perror("accept");
+    exit(1);
+  }
+
+  //接受请求accept_requset
+}
+```
+# 3. 接受请求accept_requset
+```
+accept_request()
+{
+  
+}
