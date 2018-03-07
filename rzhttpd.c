@@ -1,12 +1,26 @@
+#include <ctype.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
 #define PORT 56784
+#define BACKLOG 5
 
 void accept_request(int client)
 {
   char buf[1024];
-  init numchars;
+  char method[1024];
+  char url[1024];
+  int numchars;
   int i = 0;
+  int j = 0;
   char c = '\0';
   int size = 0;
+  int n;
 
   size = sizeof(buf);
 
@@ -38,10 +52,25 @@ void accept_request(int client)
   while(!isspace(buf[i]) && (i < sizeof(method) - 1))
   {
     method[i] = buf[i];
-    i++;
+    i++; j++;
   }
   i = 1;
   method[i] = '\0';
+
+  //如果不是GET和POST方法，调用unimplemented接口，表明方法不被支持
+  if(strcasecmp(method, "GET") && strcasecmp(method, "POST")) {
+    unimplemented();
+    return;
+  }
+
+  i = 0;
+  while(isspace(buf[j]) && (j < sizeof(buf)))
+    j++;
+
+  while(!isspace(buf[i]) && (i < sizeof(url) - 1) && (j < sizeof(buf))) {
+    url[i] = buf[j];
+    i++; j++;
+  }
 }
 
 int init_net(u_short *port)
