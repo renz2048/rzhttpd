@@ -10,22 +10,27 @@
 #define PORT 56784
 #define BACKLOG 5
 
+#define SERVER_STRING "Server: rzhttpd/0.1.0\r\n"
+
+void unimplemented(int);
+
 void accept_request(int client)
 {
   char buf[1024];
   char method[1024];
   char url[1024];
+  char path[512];
   int numchars;
-  int i = 0;
-  int j = 0;
+  size_t i,j;
   char c = '\0';
   int size = 0;
-  int n;
+  int n,k;
 
   size = sizeof(buf);
 
+  k = 0;
   //numchars = get_line(client, buf, sizeof(buf));
-  while((i < size - 1 ) && (c != '\n'))
+  while((k < size - 1 ) && (c != '\n'))
   {
     //recv函数读取tcp buffer中的数据到buf中，
     //并从tcp buffer中移除已读取的数据
@@ -40,13 +45,13 @@ void accept_request(int client)
           c = '\n';
         }
       }
-      buf[i] = c;
-      i++;
+      buf[k] = c;
+      k++;
     }else{
       c = '\n';
     }
   }
-  buf[i] = '\0';
+  buf[k] = '\0';
 
   i = 0; j = 0;
   while(!isspace(buf[i]) && (i < sizeof(method) - 1))
@@ -54,12 +59,12 @@ void accept_request(int client)
     method[i] = buf[i];
     i++; j++;
   }
-  i = 1;
   method[i] = '\0';
 
+  puts(method);
   //如果不是GET和POST方法，调用unimplemented接口，表明方法不被支持
   if(strcasecmp(method, "GET") && strcasecmp(method, "POST")) {
-    unimplemented();
+    unimplemented(client);
     return;
   }
 
@@ -67,10 +72,13 @@ void accept_request(int client)
   while(isspace(buf[j]) && (j < sizeof(buf)))
     j++;
 
-  while(!isspace(buf[i]) && (i < sizeof(url) - 1) && (j < sizeof(buf))) {
+  while(!isspace(buf[j]) && (i < sizeof(url) - 1) && (j < sizeof(buf))) {
     url[i] = buf[j];
     i++; j++;
   }
+  url[i] = '\0';
+
+  sprintf(path, "htdocs%s", url);
 }
 
 int init_net(u_short *port)
@@ -99,6 +107,28 @@ int init_net(u_short *port)
   }
 
   return httpd;
+}
+
+void unimplemented(int client)
+{
+  char buf[1024];
+
+  sprintf(buf, "HTTP/1.0 501 Method Not Implemented\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, SERVER_STRING);
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "Content-Type: text/html\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "<HTML><HEAD><TITLE><Method Not Implemented\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "</TITLE></HEAD>\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "<BODY><P>HTTP request method not supported.\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "</BODY></HTML>\r\n");
+  send(client, buf, strlen(buf), 0);
 }
 
 int main()
