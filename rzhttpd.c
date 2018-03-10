@@ -1,60 +1,40 @@
+#include <stdio.h>
 #include <ctype.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #define PORT 56784
 #define BACKLOG 5
 
 #define SERVER_STRING "Server: rzhttpd/0.1.0\r\n"
 
+void accept_request(int);
+void cat(int , FILE *);
+int get_line(int, char *, int);
+void headers(int , const char *);
+int init_net(u_short *);
+void not_found(int);
+void serve_file(int , const char *);
 void unimplemented(int);
 
 void accept_request(int client)
 {
   char buf[1024];
-  char method[1024];
-  char url[1024];
-  char path[512];
   int numchars;
+  char method[255];
+  char url[255];
+  char path[512];
   size_t i,j;
-  char c = '\0';
-  int size = 0;
-  int n,k;
+  struct stat st;
 
-  size = sizeof(buf);
-
-  k = 0;
-  //numchars = get_line(client, buf, sizeof(buf));
-  while((k < size - 1 ) && (c != '\n'))
-  {
-    //recv函数读取tcp buffer中的数据到buf中，
-    //并从tcp buffer中移除已读取的数据
-    n = recv(client, &c, 1, 0);
-    printf("%02X\n", c);
-    if(n > 0) {
-      if( c == '\r' ) {//当读到\r时，检测下一个符号是不是\n
-        n = recv(client, &c, 1, MSG_PEEK);
-        if((n > 0) && (c == '\n')) {
-          recv(client, &c, 1, 0);//如果是\n,读取出\n放入buf中
-        }else{
-          c = '\n';
-        }
-      }
-      buf[k] = c;
-      k++;
-    }else{
-      c = '\n';
-    }
-  }
-  buf[k] = '\0';
-
+  numchars = get_line(client, buf, sizeof(buf));
   i = 0; j = 0;
-  while(!isspace(buf[i]) && (i < sizeof(method) - 1))
+  while(!isspace(buf[j]) && (i < sizeof(method) - 1))
   {
     method[i] = buf[i];
     i++; j++;
@@ -77,8 +57,82 @@ void accept_request(int client)
     i++; j++;
   }
   url[i] = '\0';
+  puts(url);
 
   sprintf(path, "htdocs%s", url);
+  if(path[strlen(path) - 1] == '/') {
+    strcat(path, "index.html");
+  }
+  if(stat(path, &st) == -1) {
+    while((numchars > 0) && strcmp("\n", buf))
+      numchars = get_line(client, buf, sizeof(buf));
+    not_found(client);
+  }else{
+    if( (st.st_mode & S_IFMT) == S_IFDIR) {
+      strcat(path, "/index.html");
+    }
+  }
+
+  serve_file(client, path);
+
+  close(client);
+}
+
+void cat(int client, FILE *resource)
+{
+  char buf[1024];
+  fgets(buf, sizeof(buf), resource);
+  while(!feof(resource)) {
+    send(client, buf, strlen(buf), 0);
+    fgets(buf, sizeof(buf), resource);
+  }
+}
+
+int get_line(int client, char *buf, int size)
+{
+  int i = 0;
+  char c = '\0';
+  int n;
+
+  while((i < size - 1 ) && (c != '\n'))
+  {
+    //recv函数读取tcp buffer中的数据到buf中，
+    //并从tcp buffer中移除已读取的数据
+    n = recv(client, &c, 1, 0);
+    printf("%02X\n", c);
+    if(n > 0) {
+      if( c == '\r' ) {//当读到\r时，检测下一个符号是不是\n
+        n = recv(client, &c, 1, MSG_PEEK);
+        if((n > 0) && (c == '\n')) {
+          recv(client, &c, 1, 0);//如果是\n,读取出\n放入buf中
+        }else{
+          c = '\n';
+        }
+      }
+      buf[i] = c;
+      i++;
+    }else{
+      c = '\n';
+    }
+  }
+  buf[i] = '\0';
+
+  return i;
+}
+
+void headers(int client, const char *filename)
+{
+  char buf[1024];
+  (void)filename;
+
+  strcpy(buf, "HTTP/1.0 200 OK\r\n");
+  send(client, buf, strlen(buf), 0);
+  strcpy(buf, SERVER_STRING);
+  send(client, buf, strlen(buf), 0);
+  strcpy(buf, "Content-Type: text/html\r\n");
+  send(client, buf, strlen(buf), 0);
+  strcpy(buf, "\r\n");
+  send(client, buf, strlen(buf), 0);
 }
 
 int init_net(u_short *port)
@@ -107,6 +161,51 @@ int init_net(u_short *port)
   }
 
   return httpd;
+}
+
+void not_found(int client)
+{
+  char buf[1024];
+
+  sprintf(buf, "HTTP/1.0 404 NOT FOUND\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, SERVER_STRING);
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "Content-Type: text/html\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "<HTML><TITLE>Not Found</TITLE>\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "<BODY><P>The server cound not fulfill\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "your request because the resource specified\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "is unavailable or nonexistent.\r\n");
+  send(client, buf, strlen(buf), 0);
+  sprintf(buf, "</BODY></HTML>\r\n");
+  send(client, buf, strlen(buf), 0);
+}
+
+void serve_file(int client, const char *filename)
+{
+  FILE *resource = NULL;
+  int numchars = 1;
+  char buf[1024];
+
+  buf[0] = 'A'; buf[1] = '\0';
+  while((numchars > 0) && strcmp("\n", buf))
+    numchars = get_line(client, buf, sizeof(buf));
+
+  resource = fopen(filename, "r");
+  if(resource == NULL) {
+    not_found(client);
+  }else{
+    headers(client, filename);
+    printf("hhhhhhhhhhh");
+    cat(client, resource);
+  }
+  fclose(resource);
 }
 
 void unimplemented(int client)
