@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <ctype.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <stdlib.h>
@@ -234,11 +235,24 @@ int main()
 {
   int server_sock = -1;
   int client_sock = -1;
+  int epfd;
+
   u_short port = PORT;
   struct sockaddr_in client_name;
   socklen_t client_name_len = sizeof(client_name);
   server_sock = init_net(&port);
   printf("httpd running on port %d\n",port);
+
+  epfd = epoll_create();
+  if( epfd == -1 ) {
+    perror("epoll_create");
+    exit(1);
+  }
+
+  event.data.fd = server_sock;
+  event.events = EPOLLIN | EPOLLET;
+  //int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+  epoll_ctl(epfd, EPOLL_CTL_ADD, server_sock, &event);
 
   while(1)
   {
