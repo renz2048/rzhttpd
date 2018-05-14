@@ -11,6 +11,7 @@
 
 #define PORT 56784
 #define BACKLOG 5
+#define MAXEVENTS 64
 
 #define SERVER_STRING "Server: rzhttpd/0.1.0\r\n"
 
@@ -53,7 +54,8 @@ void accept_request(int client)
   while(isspace(buf[j]) && (j < sizeof(buf)))
     j++;
 
-  while(!isspace(buf[j]) && (i < sizeof(url) - 1) && (j < sizeof(buf))) {
+  while(!isspace(buf[j]) && (i < sizeof(url) - 1) && 
+        (j < sizeof(buf))) {
     url[i] = buf[j];
     i++; j++;
   }
@@ -231,11 +233,14 @@ void unimplemented(int client)
   send(client, buf, strlen(buf), 0);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
   int server_sock = -1;
   int client_sock = -1;
   int epfd;
+  int s;
+  struct epoll_event event;
+  struct epoll_event *events;
 
   u_short port = PORT;
   struct sockaddr_in client_name;
@@ -243,7 +248,8 @@ int main()
   server_sock = init_net(&port);
   printf("httpd running on port %d\n",port);
 
-  epfd = epoll_create();
+  //创建epoll句柄，返回一个新的句柄
+  epfd = epoll_create1(0);
   if( epfd == -1 ) {
     perror("epoll_create");
     exit(1);
@@ -251,12 +257,85 @@ int main()
 
   event.data.fd = server_sock;
   event.events = EPOLLIN | EPOLLET;
-  //int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
-  epoll_ctl(epfd, EPOLL_CTL_ADD, server_sock, &event);
+  /*
+   * int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+   * 注册需要监听的类型
+   * op:
+   *    EPOLL_CTL_ADD:注册新的fd到epfd中
+   *    EPOLL_CTL_MOD:修改已经注册的fd的监听事件
+   *    EPOLL_CTL_DEL:从epfd中删除一个fd
+   * event:
+   *typedef union epoll_data
+   *{
+   *   void *ptr;
+   *   int fd;
+   *   __uint32_t u32;
+   *   __uint64_t u64;
+   *} epoll_data_t;
+   *struct epoll_event
+   *{
+   *  __uint32_t events;
+   *  epoll_data_t data;
+   *};
+   */
+
+  s = epoll_ctl(epfd, EPOLL_CTL_ADD, server_sock, &event);
+  if( s == -1 ) {
+    perror("epoll_ctl");
+    exit(1);
+  }
+
+  events = calloc(MAXEVENTS, sizeof event);
+
+  //The event loop
+  while(1)
+  {
+    int n, i;
+
+    n = epoll_wait(epfd, events, MAXEVENTS, -1);
+    for(i = 0; i < n; i++) {
+      if((events[i].events & EPOLLERR) ||
+          (events[i].events & EPOLLHUP) ||
+          (!(events[i].events & EPOLLIN))) {
+        /* An error has occured on this fd, or the socket 
+           is not ready for reading (why were we notified then?) */
+        fprintf(stderr, "epoll error\n");
+        close(events[i].data.fd);
+        continue;
+      }
+      else if(server_sock == events[i].data.fd) {
+        while(1) {
+          struct sockaddr in_addr;
+          socklen_t in_len;
+          int infd;
+          char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
+
+          in_len = sizeof in_addr;
+          infd = accept (sfd, &in_addr, &in_len);
+          if (infd == -1)
+          {
+            if ((errno == EAGAIN) ||
+                (errno == EWOULDBLOCK))
+            {
+              /* We have processed all incoming
+                 connections. */
+              break;
+            }
+            else
+            {
+              perror ("accept");
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
 
   while(1)
   {
-    client_sock = accept(server_sock, (struct sockaddr *)&client_name, &client_name_len);
+    client_sock = accept(server_sock, 
+        (struct sockaddr *)&client_name, &client_name_len);
     if( client_sock == -1 ) {
       perror("accept");
       exit(1);
