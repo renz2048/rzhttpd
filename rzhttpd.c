@@ -34,6 +34,7 @@ void accept_request(int client)
 
   numchars = get_line(client, buf, sizeof(buf));
   i = 0; j = 0;
+  puts(buf);
   while(!isspace(buf[j]) && (i < sizeof(method) - 1))
   {
     method[i] = buf[i];
@@ -99,7 +100,7 @@ int get_line(int client, char *buf, int size)
     //recv函数读取tcp buffer中的数据到buf中，
     //并从tcp buffer中移除已读取的数据
     n = recv(client, &c, 1, 0);
-    printf("%02X\n", c);
+    //printf("%02X ", c);
     if(n > 0) {
       if( c == '\r' ) {//当读到\r时，检测下一个符号是不是\n
         n = recv(client, &c, 1, MSG_PEEK);
