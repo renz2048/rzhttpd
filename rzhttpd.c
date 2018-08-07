@@ -1,25 +1,32 @@
 #include <stdio.h>
-#include <ctype.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <stdlib.h>
-#include <string.h>
-#include <arpa/inet.h>
 #include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <ctype.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <sys/wait.h>
 #include <sys/stat.h>
+#include <signal.h>
 
-#define PORT 56784
-#define BACKLOG 5
+#define PORT "5678"
+#define BACKLOG 10
 
 #define SERVER_STRING "Server: rzhttpd/0.1.0\r\n"
 
 void accept_request(int);
 void cat(int , FILE *);
+void *get_in_addr(struct sockaddr *sa);
 int get_line(int, char *, int);
 void headers(int , const char *);
-int init_net(u_short *);
+int init_net();
 void not_found(int);
 void serve_file(int , const char *);
+void sigchld_handler(int s);
 void unimplemented(int);
 
 void accept_request(int client)
@@ -89,6 +96,14 @@ void cat(int client, FILE *resource)
   }
 }
 
+void *get_in_addr(struct sockaddr *sa)
+{
+  if (sa->sa_family == AF_INET) {
+    return &(((struct sockaddr_in*)sa)->sin_addr);
+  }
+  return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
 int get_line(int client, char *buf, int size)
 {
   int i = 0;
@@ -136,38 +151,51 @@ void headers(int client, const char *filename)
   send(client, buf, strlen(buf), 0);
 }
 
-int init_net(u_short *port)
+int init_net()
 {
-  int httpd = 0;
-  struct sockaddr_in name;
+  int sockfd;
+  struct addrinfo hints, *servinfo, *p;
   int yes=1;
+  int rv;
 
-  if( (httpd = socket(PF_INET, SOCK_STREAM, 0)) == -1 ) {
-    perror("socket");
-    exit(1);
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+
+  if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+    return 1;
   }
 
-  memset(&name, 0, sizeof(name));
-  name.sin_family = AF_INET;
-  name.sin_port = htons(*port);
-  name.sin_addr.s_addr = htonl(INADDR_ANY);
+  for(p = servinfo;p != NULL;p = p->ai_next) {
+    if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+      perror("server: socket");
+      continue;
+    }
 
-  if(setsockopt(httpd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
-    perror("setsockopt");
-    exit(1);
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+      perror("setsockopt");
+      exit(1);
+    }
+
+    if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+      close(sockfd);
+      perror("server: bind");
+      continue;
+    }
+
+    break;
   }
 
-  if( (bind(httpd, (struct sockaddr *)&name, sizeof(name))) == -1 ) {
-    perror("bind");
-    exit(1);
-  }
+  freeaddrinfo(servinfo);
 
-  if( (listen(httpd, BACKLOG)) == -1 ) {
+  if( (listen(sockfd, BACKLOG)) == -1 ) {
     perror("listen");
     exit(1);
   }
 
-  return httpd;
+  return sockfd;
 }
 
 void not_found(int client)
@@ -215,6 +243,11 @@ void serve_file(int client, const char *filename)
   fclose(resource);
 }
 
+void sigchld_handler(int s)
+{
+  while(waitpid(-1, NULL, WNOHANG) > 0);
+}
+
 void unimplemented(int client)
 {
   char buf[1024];
@@ -237,24 +270,44 @@ void unimplemented(int client)
   send(client, buf, strlen(buf), 0);
 }
 
-int main()
+int main(void)
 {
   int server_sock = -1;
   int client_sock = -1;
-  u_short port = PORT;
-  struct sockaddr_in client_name;
-  socklen_t client_name_len = sizeof(client_name);
-  server_sock = init_net(&port);
-  printf("httpd running on port %d\n",port);
+  struct sockaddr_storage client_addr;
+  socklen_t client_len = sizeof(client_addr);
+  struct sigaction sa;
+  char s[INET6_ADDRSTRLEN];
+
+  server_sock = init_net();
+
+  //signore handler
+  sa.sa_handler = sigchld_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+
+  if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+    perror("sigaction");
+    exit(1);
+  }
 
   while(1)
   {
-    client_sock = accept(server_sock, (struct sockaddr *)&client_name, &client_name_len);
+    client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &client_len);
     if( client_sock == -1 ) {
       perror("accept");
-      exit(1);
+      continue;
     }
-    accept_request(client_sock);
+
+    inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), s, sizeof s);
+    printf("server: got connectin from %s\n", s);
+
+    if (!fork()) {//child process
+      close(server_sock);
+      accept_request(client_sock);
+      exit(0);
+    }
+    close(client_sock);//parent process
   }
 
   close(server_sock);
