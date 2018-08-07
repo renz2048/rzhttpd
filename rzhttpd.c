@@ -34,7 +34,7 @@ void accept_request(int client)
 
   numchars = get_line(client, buf, sizeof(buf));
   i = 0; j = 0;
-  puts(buf);
+  //puts(buf);
   while(!isspace(buf[j]) && (i < sizeof(method) - 1))
   {
     method[i] = buf[i];
@@ -42,7 +42,7 @@ void accept_request(int client)
   }
   method[i] = '\0';
 
-  puts(method);
+  //puts(method);
   //如果不是GET和POST方法，调用unimplemented接口，表明方法不被支持
   if(strcasecmp(method, "GET") && strcasecmp(method, "POST")) {
     unimplemented(client);
@@ -58,7 +58,7 @@ void accept_request(int client)
     i++; j++;
   }
   url[i] = '\0';
-  puts(url);
+  //puts(url);
 
   sprintf(path, "htdocs%s", url);
   if(path[strlen(path) - 1] == '/') {
@@ -140,6 +140,7 @@ int init_net(u_short *port)
 {
   int httpd = 0;
   struct sockaddr_in name;
+  int yes=1;
 
   if( (httpd = socket(PF_INET, SOCK_STREAM, 0)) == -1 ) {
     perror("socket");
@@ -150,6 +151,11 @@ int init_net(u_short *port)
   name.sin_family = AF_INET;
   name.sin_port = htons(*port);
   name.sin_addr.s_addr = htonl(INADDR_ANY);
+
+  if(setsockopt(httpd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+    perror("setsockopt");
+    exit(1);
+  }
 
   if( (bind(httpd, (struct sockaddr *)&name, sizeof(name))) == -1 ) {
     perror("bind");
@@ -203,7 +209,7 @@ void serve_file(int client, const char *filename)
     not_found(client);
   }else{
     headers(client, filename);
-    printf("hhhhhhhhhhh");
+    //printf("hhhhhhhhhhh");
     cat(client, resource);
   }
   fclose(resource);
