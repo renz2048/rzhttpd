@@ -2,7 +2,7 @@
 
 # 1. 简介
 
-a simple httpd server by C
+一个简单的httpd服务器
 
 v1.0.0:
 
@@ -117,3 +117,16 @@ struct addrinfo {
 - ai_flags
     - 若设置为AI_PASSIVE且 getaddrinfo的node为NULL，则返回的参数可以用于bind和accept（服务端）；
     - 若未设置该参数，则返回的参数可用于connect、sendto、sendmsg（客户端）。
+
+例如：
+
+获得域名对应的IP地址：
+
+```c
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC;     //IPv4 或 IPv6
+	hints.ai_socktype = SOCK_STREAM; //TCP
+	hints.ai_flags = 0;
+	hints.ai_protocol = 0;
+```
+
