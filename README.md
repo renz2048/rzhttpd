@@ -82,3 +82,38 @@ serve_file(client, path);
 
 ### 2.2.3 读取页面(serve_file)
 
+# 3. 网络编程
+
+##### 3.1 getaddrinfo
+
+```c
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
+int getaddrinfo(const char *node, const char *service,
+        const struct addrinfo *hints,
+        struct addrinfo **res);
+
+void freeaddrinfo(struct addrinfo *res);
+
+const char *gai_strerror(int errcode);
+
+
+struct addrinfo {
+    int              ai_flags;
+    int              ai_family;
+    int              ai_socktype;
+    int              ai_protocol;
+    socklen_t        ai_addrlen;
+    struct sockaddr *ai_addr;
+    char            *ai_canonname;
+    struct addrinfo *ai_next;
+};
+```
+- ai_family：为返回的地址指定地址族（AF_INET、AF_INET6、AF_UNSPEC）
+- ai_socktype：指定首选的套接字类型（SOCK_STREAM、SOCK_DGRAM）
+- ai_protocol：指定返回的套接字地址的协议
+- ai_flags
+    - 若设置为AI_PASSIVE且 getaddrinfo的node为NULL，则返回的参数可以用于bind和accept（服务端）；
+    - 若未设置该参数，则返回的参数可用于connect、sendto、sendmsg（客户端）。
